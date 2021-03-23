@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 fastapi = {extras = ["all"], version = "*"}
 python-multipart = "*"
+sqlalchemy = "*"
+alembic = "*"
 
 [dev-packages]
 pylint = "*"
