@@ -182,3 +182,4 @@ Thumbs.db #thumbnail cache on Windows
 
 .vscode/
 db.sqlite3
+.env*

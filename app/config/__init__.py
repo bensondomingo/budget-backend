@@ -13,10 +13,10 @@ class ServerSettings(BaseSettings):
 
 
 class DatabaseSettings(BaseSettings):
-    DB_NAME: str = 'budget'
-    DB_HOST: str = 'localhost'
-    DB_PORT: int = 27017
-    DB_URI: str = 'sqlite:///./db.sqlite3'
+    DB_NAME: str = 'budget-dev'
+    DB_HOST: str = 'db'
+    DB_PORT: int = 5432
+    DB_URI: str = 'postgresql+psycopg2://root:secret@db/budget-dev'
 
 
 class SecuritySettings(BaseSettings):

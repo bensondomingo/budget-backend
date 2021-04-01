@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    container_name: budget-backend-dev
+    networks:
+      - budget-network-dev
+    volumes:
+      - ./:/usr/src/app
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - db
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: budget-pgadmin-dev
+    restart: always
+    networks:
+      - budget-network-dev
+    env_file:
+      - ./.env.dev
+    ports:
+      - "8001:80"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:alpine
+    container_name: budget-db-dev
+    restart: always
+    networks:
+      - budget-network-dev
+    env_file:
+      - ./.env.dev
+    volumes:
+      - "budget-volume-dev:/var/lib/postgresql/data"
+
+volumes:
+  budget-volume-dev:
+    name: budget-volume-dev
+networks:
+  budget-network-dev:
+    name: budget-network-dev
+    driver: bridge
