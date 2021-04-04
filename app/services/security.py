@@ -1,10 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Optional
 
-from jose import jwt
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 
+from app import banned_token_registry
 from app.config import settings
+from app.database import schemas as s
+from app.errors import credentials_exception
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='auth/signin')
 
 pwd_context = CryptContext(
     schemes=[settings.PWD_HASH_SCHEME], deprecated='auto')
@@ -30,3 +35,17 @@ def create_access_token(data: dict):
                    timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)})
     token = jwt.encode(payload, settings.SECRET_KEY, settings.SECRET_ALGORITHM)
     return token
+
+
+def ban_token(token: s.BanToken):
+    if banned_token_registry.exists(token.access_token):
+        raise credentials_exception
+    try:
+        payload = jwt.decode(token.access_token, settings.SECRET_KEY,
+                             settings.SECRET_ALGORITHM)
+    except JWTError:
+        raise credentials_exception
+    exp_ts = payload.get('exp', datetime.now().timestamp())
+    td = datetime.fromtimestamp(exp_ts) - datetime.now()
+    banned_token_registry.setex(
+        name=token.access_token, time=td, value=token.reason)

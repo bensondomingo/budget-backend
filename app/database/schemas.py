@@ -69,3 +69,8 @@ class User(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class BanToken(BaseModel):
+    access_token: str
+    reason: str

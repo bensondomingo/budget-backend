@@ -11,6 +11,7 @@ alembic = "*"
 python-jose = {extras = ["cryptography"], version = "*"}
 passlib = {extras = ["bcrypt"], version = "*"}
 psycopg2 = "*"
+redis = "*"
 
 [dev-packages]
 pylint = "*"

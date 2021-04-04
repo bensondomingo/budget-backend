@@ -22,7 +22,7 @@ class DatabaseSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     SECRET_KEY: str = '08a9cc52c109039e'
     SECRET_ALGORITHM: str = 'HS256'
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     PWD_HASH_SCHEME: str = 'bcrypt'
 
 

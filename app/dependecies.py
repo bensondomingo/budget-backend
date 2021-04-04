@@ -2,17 +2,17 @@
 from typing import Union
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
+from app import banned_token_registry
+from .config import settings
 from .database.engine import SessionLocal
 from .database import schemas as s
 from .database import models as m
-from .services.security import Password
-from .config import settings
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='auth/signin')
+from .errors import credentials_exception
+from .services.security import oauth2_scheme, Password
 
 
 def get_db():
@@ -31,10 +31,9 @@ def get_current_user(
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db)) -> s.User:
 
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"})
+    # Ensure that token is not banned, else raise credential_exception
+    if banned_token_registry.exists(token):
+        raise credentials_exception
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY,
