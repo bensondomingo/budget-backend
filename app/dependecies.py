@@ -50,6 +50,12 @@ def get_current_user(
     return s.User.from_orm(db_user)
 
 
+def get_admin_user(user: s.User = Depends(get_current_user)) -> s.User:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return user
+
+
 def authenticate_user(
         db: Session = Depends(get_db),
         form_data: OAuth2PasswordRequestForm = Depends()) -> s.User:

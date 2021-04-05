@@ -1,18 +1,17 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.param_functions import Query
 from sqlalchemy.orm import Session
 
-from app.database.schemas import Budget, BudgetCreate
-from app.database import crud as c
-from app.database import schemas as s, models as m
+from app.database import models as m, schemas as s
 from app.dependecies import get_current_user, get_db
 
-router = APIRouter(tags=['budgets'])
+router = APIRouter(prefix='/budgets', tags=['budgets'])
 
 
-@router.post('/budgets/', response_model=Budget)
-def create_budget(
-        budget: BudgetCreate,
+@router.post('/', response_model=s.Budget, status_code=status.HTTP_201_CREATED)
+def add_budget(
+        budget: s.BudgetCreate,
         db: Session = Depends(get_db),
         user: s.User = Depends(get_current_user)):
 
@@ -24,15 +23,31 @@ def create_budget(
     db.add(db_budget)
     db.commit()
     db.refresh(db_budget)
-    return s.Budget.from_orm(db_budget)
+    return db_budget
 
 
-@router.get('/budgets/', response_model=List[Budget])
+@router.get('/', response_model=List[s.Budget], status_code=status.HTTP_200_OK)
 def read_user_budgets(
         skip: int = 0,
         limit: int = 100,
         db: Session = Depends(get_db),
-        user: s.User = Depends(get_current_user)):
+        user: s.User = Depends(get_current_user),
+        category: Optional[List[str]] = Query(
+            None, description='income | deductions | expenses | savings')):
 
-    budgets = c.get_budgets(db=db, skip=skip, limit=limit)
-    return budgets
+    q = db.query(m.Budget).filter_by(user_id=user.id)
+    if category is not None:
+        q = q.filter(m.Budget.category.in_(category))
+
+    return q.offset(skip).limit(limit).all()
+
+
+@router.get('/{budget_id}', response_model=s.Budget)
+def read_budget(budget_id: str, user: s.User = Depends(
+        get_current_user), db: Session = Depends(get_db)):
+
+    db_budget = db.query(m.Budget).filter_by(
+        user_id=user.id, id=budget_id).first()
+    if db_budget is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return db_budget
