@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 
 from app import banned_token_registry
 from app.config import settings
-from app.database import schemas as s
+from app.auth import schemas as s
 from app.errors import credentials_exception
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='auth/signin')

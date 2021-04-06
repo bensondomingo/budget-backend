@@ -1,10 +1,12 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.param_functions import Query
+from pydantic.types import UUID4  # pylint: disable=no-name-in-module
 from sqlalchemy.orm import Session
 
-from app.database import models as m, schemas as s
+from app.auth.schemas import User
 from app.dependecies import get_current_user, get_db
+from . import models as m, schemas as s
 
 router = APIRouter(prefix='/budgets', tags=['budgets'])
 
@@ -13,7 +15,7 @@ router = APIRouter(prefix='/budgets', tags=['budgets'])
 def add_budget(
         budget: s.BudgetCreate,
         db: Session = Depends(get_db),
-        user: s.User = Depends(get_current_user)):
+        user: User = Depends(get_current_user)):
 
     db_budget = db.query(m.Budget).filter(m.Budget.name == budget.name).first()
     if db_budget:
@@ -31,7 +33,7 @@ def read_user_budgets(
         skip: int = 0,
         limit: int = 100,
         db: Session = Depends(get_db),
-        user: s.User = Depends(get_current_user),
+        user: User = Depends(get_current_user),
         category: Optional[List[str]] = Query(
             None, description='income | deductions | expenses | savings')):
 
@@ -43,7 +45,7 @@ def read_user_budgets(
 
 
 @router.get('/{budget_id}', response_model=s.Budget)
-def read_budget(budget_id: str, user: s.User = Depends(
+def read_budget(budget_id: UUID4, user: User = Depends(
         get_current_user), db: Session = Depends(get_db)):
 
     db_budget = db.query(m.Budget).filter_by(

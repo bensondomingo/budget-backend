@@ -17,6 +17,7 @@ class DatabaseSettings(BaseSettings):
     DB_HOST: str = 'db'
     DB_PORT: int = 5432
     DB_URI: str = 'postgresql+psycopg2://root:secret@db/budget-dev'
+    DB_ASYNC_URI: str = 'postgresql+asyncpg://root:secret@db/budget-dev'
 
 
 class SecuritySettings(BaseSettings):

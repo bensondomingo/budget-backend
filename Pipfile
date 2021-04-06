@@ -12,6 +12,7 @@ python-jose = {extras = ["cryptography"], version = "*"}
 passlib = {extras = ["bcrypt"], version = "*"}
 psycopg2 = "*"
 redis = "*"
+asyncpg = "*"
 
 [dev-packages]
 pylint = "*"

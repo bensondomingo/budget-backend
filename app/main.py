@@ -1,12 +1,12 @@
-from app.database.models import Budget
 from fastapi import FastAPI
 
-from .routes import auth, users, budgets
+from .auth.routes import auth_router, user_router
+from .budget.routes import router as budget_router
 
 
 app = FastAPI()
 
 
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(budgets.router)
+app.include_router(auth_router)
+app.include_router(user_router)
+app.include_router(budget_router)
