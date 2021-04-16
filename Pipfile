@@ -13,6 +13,7 @@ passlib = {extras = ["bcrypt"], version = "*"}
 psycopg2 = "*"
 redis = "*"
 asyncpg = "*"
+aioredis = "*"
 
 [dev-packages]
 pylint = "*"

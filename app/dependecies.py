@@ -1,12 +1,13 @@
 """ Project level dependencies lives here """
 from typing import Union
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from jose import jwt, JWTError
+from aioredis import Redis
 
 
 from app import banned_token_registry
@@ -37,7 +38,7 @@ async def get_async_db():
         await db_session.close()
 
 
-def get_current_user(
+def _get_current_user(
         token: str = Depends(oauth2_scheme),
         db: Session = Depends(get_db)) -> us.User:
 
@@ -61,14 +62,17 @@ def get_current_user(
     return us.User.from_orm(db_user)
 
 
-async def async_get_current_user(
+async def get_current_user(
+        request: Request,
         token: str = Depends(oauth2_scheme),
         db: AsyncSession = Depends(get_async_db)) -> us.User:
 
     # Ensure that token is not banned, else raise credential_exception
-    if banned_token_registry.exists(token):
+    redis: Redis = request.app.redis
+    if await redis.exists(token):
         raise credentials_exception
 
+    # Ensure user is a valid db record
     try:
         payload = jwt.decode(token, settings.SECRET_KEY,
                              settings.SECRET_ALGORITHM)
@@ -79,7 +83,9 @@ async def async_get_current_user(
         raise credentials_exception
 
     stmt = select(um.User).where(um.User.username == username)
-    result = (await db.execute(stmt)).fetchone()
+    result = (await db.execute(stmt)).one_or_none()
+    if result is None:
+        raise credentials_exception
     return result.User
 
 
@@ -89,8 +95,8 @@ def get_admin_user(user: us.User = Depends(get_current_user)) -> us.User:
     return user
 
 
-def authenticate_user(
-        db: Session = Depends(get_db),
+async def authenticate_user(
+        db: AsyncSession = Depends(get_async_db),
         form_data: OAuth2PasswordRequestForm = Depends()) -> us.User:
     username = form_data.username
     password = form_data.password
@@ -100,25 +106,30 @@ def authenticate_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    db_user = db.query(um.User).filter(
-        um.User.username == username).first()
-    if db_user is None:
+    stmt = select(um.User).where(um.User.username == username)
+    result = (await db.execute(stmt)).fetchone()
+    if result is None:
         raise exception
+
+    db_user: um.User = result.User
     if not Password.verify(password, db_user.password):
         raise exception
-    return us.User.from_orm(db_user)
+    return db_user
 
 
-def create_user(user: us.UserCreate, db: Session = Depends(get_db)) -> us.User:
-    db_user = db.query(um.User).filter(
-        um.User.username == user.username).first()
-    if db_user:
+async def create_user(
+        user: us.UserCreate,
+        db: AsyncSession = Depends(get_async_db)) -> us.User:
+    stmt = select(um.User).where(um.User.username == user.username)
+    result = (await db.execute(stmt)).fetchone()
+    if result is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username is in use")
+
     user.password = Password.hash(user.password)
     db_user = um.User(**user.dict(exclude={'password2'}))
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return us.User.from_orm(db_user)
+    await db.flush()
+    await db.commit()
+    return db_user

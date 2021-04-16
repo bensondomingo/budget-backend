@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, String
+from sqlalchemy import Column, Enum, Float, ForeignKey, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -19,9 +19,9 @@ class Budget(Base):
     planned_amount = Column(Float, nullable=False)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=datetime.now(
-        timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow())
+    updated_at = Column(TIMESTAMP(timezone=True),
+                        default=datetime.utcnow(), onupdate=datetime.utcnow())
 
     # Foreign Keys
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
@@ -37,12 +37,12 @@ class Transaction(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     amount = Column(Float, nullable=False)
     description = Column(String(100), nullable=False)
-    date = Column(DateTime, default=datetime.now(timezone.utc))
+    date = Column(TIMESTAMP(timezone=True), default=datetime.utcnow())
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=datetime.now(
-        timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow())
+    updated_at = Column(TIMESTAMP(timezone=True), default=datetime.now(
+        timezone.utc), onupdate=datetime.utcnow())
 
     # Foreign Keys
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
