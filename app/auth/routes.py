@@ -1,4 +1,4 @@
-from typing import List
+from typing import Sequence
 from pydantic.types import UUID4  # pylint: disable=no-name-in-module
 from fastapi.exceptions import HTTPException
 from fastapi import APIRouter, Depends, Request, status
@@ -49,7 +49,7 @@ async def read_users_me(user: s.User = Depends(get_current_user)):
 
 
 @user_router.get(
-    '/', response_model=List[s.User],
+    '/', response_model=Sequence[s.User],
     dependencies=[Depends(get_admin_user)],
     status_code=status.HTTP_200_OK)
 async def read_users(

@@ -107,7 +107,7 @@ async def authenticate_user(
     )
 
     stmt = select(um.User).where(um.User.username == username)
-    result = (await db.execute(stmt)).fetchone()
+    result = (await db.execute(stmt)).one_or_none()
     if result is None:
         raise exception
 

@@ -20,3 +20,20 @@ async def get_budget(
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return result.Budget
+
+
+async def get_transaction(
+        transaction_id: UUID4,
+        db: AsyncSession = Depends(get_async_db),
+        user: us.User = Depends(get_current_user)):
+    stmt = select(
+        m.Transaction,
+        m.Budget.category,
+        m.Budget.name.label('budget')).\
+        join(m.Budget).where(m.Transaction.id == transaction_id).\
+        where(m.Transaction.user_id == user.id)
+
+    result = (await db.execute(stmt)).one_or_none()
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return result

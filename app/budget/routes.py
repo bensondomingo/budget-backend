@@ -1,51 +1,37 @@
+import asyncio
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.param_functions import Query
 from sqlalchemy import select
+from sqlalchemy import func
+from sqlalchemy.engine.row import Row
 from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy.orm import aliased
+from starlette.requests import Request
 from starlette.status import HTTP_200_OK
 
-from app.auth.schemas import User
+from app.auth import schemas as us
 from app.dependecies import get_async_db, get_current_user
+from app.services.utils import (
+    generate_page_meta, get_default_date_range, populate_transaction_schema)
 from . import models as m, schemas as s
-
-from .dep import get_budget
+from .dep import get_budget, get_transaction
 
 budget_router = APIRouter(prefix='/budgets', tags=['budgets'])
 transactions_router = APIRouter(prefix='/transactions', tags=['transactions'])
 
 
-@budget_router.post(
-    '/', response_model=s.Budget,
-    status_code=status.HTTP_201_CREATED)
-async def add_budget(
-        budget: s.BudgetCreate,
-        db: AsyncSession = Depends(get_async_db),
-        user: User = Depends(get_current_user)):
-
-    stmt = select(m.Budget).where(m.Budget.name == budget.name)
-    result = (await db.execute(stmt)).one_or_none()
-    if result is not None:
-        raise HTTPException(
-            status_code=400, detail="Budget name already exists")
-
-    db_budget = m.Budget(**budget.dict(), user_id=user.id)
-    db.add(db_budget)
-    await db.flush()
-    await db.commit()
-    await db.refresh(db_budget)
-    return db_budget
-
-
 @budget_router.get(
-    '/', response_model=List[s.Budget],
+    '/', response_model=s.PaginatedBudgets,
     status_code=status.HTTP_200_OK)
 async def read_user_budgets(
-        skip: int = 0,
+        request: Request,
+        offset: int = 0,
         limit: int = 100,
         db: AsyncSession = Depends(get_async_db),
-        user: User = Depends(get_current_user),
+        user: us.User = Depends(get_current_user),
         category: Optional[List[str]] = Query(
             None, description='income | deductions | expenses | savings',
             regex='^income$|^deductions$|^expenses$|^savings$')):
@@ -54,9 +40,38 @@ async def read_user_budgets(
         m.Budget.user_id == user.id)
     if category is not None:
         stmt = stmt.where(m.Budget.category.in_(category))
+    subq = aliased(m.Budget, stmt.subquery())
 
-    result = (await db.execute(stmt.offset(skip).limit(limit))).all()
-    return [row.Budget for row in result]
+    resp = await asyncio.gather(
+        db.execute(stmt.offset(offset).limit(limit)),
+        db.execute(func.count(subq.id)))
+    result, row_count = resp
+    paginated_resp = s.PaginatedBudgets(
+        meta=generate_page_meta(request, row_count.scalar()),
+        items=result.scalars().all())
+    return paginated_resp
+
+
+@budget_router.post(
+    '/', response_model=s.Budget,
+    status_code=status.HTTP_201_CREATED)
+async def add_budget(
+        budget: s.BudgetCreate,
+        db: AsyncSession = Depends(get_async_db),
+        user: us.User = Depends(get_current_user)):
+
+    stmt = select(m.Budget).\
+        where(m.Budget.name == budget.name).\
+        where(m.Budget.month == budget.month)
+    result = (await db.execute(stmt)).one_or_none()
+    if result is not None:
+        raise HTTPException(
+            status_code=400, detail="Budget name already exists")
+
+    db_budget = m.Budget(**budget.dict(), user_id=user.id)
+    db.add(db_budget)
+    await db.commit()
+    return db_budget
 
 
 @budget_router.get('/{budget_id}', response_model=s.Budget)
@@ -76,11 +91,10 @@ async def update_budget(
         budget_model.category = budget_schema.category
     if budget_schema.planned_amount:
         budget_model.planned_amount = budget_schema.planned_amount
-
+    if budget_schema.examples:
+        budget_model.examples = budget_schema.examples
     db.add(budget_model)
-    await db.flush()
     await db.commit()
-    await db.refresh(budget_model)
     return budget_model
 
 
@@ -89,10 +103,45 @@ async def update_budget(
     status_code=status.HTTP_204_NO_CONTENT)
 async def remove_budget(budget: m.Budget = Depends(get_budget),
                         db: AsyncSession = Depends(get_async_db)):
-
     await db.delete(budget)
-    await db.flush()
     await db.commit()
+
+
+@transactions_router.get(
+    '/', response_model=s.PaginatedTransactions,
+    status_code=HTTP_200_OK)
+async def read_transactions(
+        request: Request,
+        offset: int = 0,
+        limit: int = 100,
+        start: date = Query(get_default_date_range().start),
+        end: date = Query(get_default_date_range().end),
+        category: str = Query(None),
+        user: us.User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_async_db)):
+
+    stmt = select(
+        m.Transaction,
+        m.Budget.category,
+        m.Budget.name.label('budget')).\
+        join(m.Budget)
+    if category:
+        stmt = stmt.where(m.Budget.category == category)
+    stmt = stmt.where(m.Transaction.user_id == user.id).\
+        where(m.Transaction.date.between(start, end)).\
+        order_by(m.Transaction.date)
+    subq = aliased(m.Transaction, stmt.subquery())
+
+    transactions, row_count = await asyncio.gather(
+        db.execute(stmt.offset(offset).limit(limit)),
+        db.execute(select(func.count(subq.id)))
+    )
+
+    paginated_resp = s.PaginatedTransactions(
+        meta=generate_page_meta(request, row_count.scalar()),
+        items=populate_transaction_schema(transactions, s.Transaction))
+
+    return paginated_resp
 
 
 @transactions_router.post(
@@ -106,14 +155,31 @@ async def add_transaction(
     db_transaction = m.Transaction(**transaction.dict(),
                                    user_id=budget_model.user_id,
                                    budget_id=budget_model.id)
+
     db.add(db_transaction)
-    await db.flush()
     await db.commit()
-    return db_transaction
+    response = s.Transaction.from_orm(db_transaction)
+    response.category = budget_model.category
+    response.budget = budget_model.name
+    return response
 
 
 @transactions_router.get(
-    '/', response_model=List[s.Transaction],
-    status_code=HTTP_200_OK)
-async def read_transactions():
-    pass
+    '/{transaction_id}',
+    status_code=status.HTTP_200_OK,
+    response_model=s.Transaction)
+async def read_transaction(transaction: Row = Depends(get_transaction)):
+    t = s.Transaction.from_orm(transaction.Transaction)
+    t.category = transaction.category.value
+    t.budget = transaction.budget
+    return t
+
+
+@transactions_router.delete(
+    '/{transaction_id}',
+    status_code=status.HTTP_204_NO_CONTENT)
+async def remove_transaction(
+        transaction: Row = Depends(get_transaction),
+        db: AsyncSession = Depends(get_async_db)):
+    await db.delete(transaction.Transaction)
+    await db.commit()
