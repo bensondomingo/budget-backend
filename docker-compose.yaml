@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  backend:
+    image: bdomingo/budget-backend:latest
+    container_name: budget-backend
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:alpine
+    container_name: budget-db
+    restart: always
+
+  redis:
+    image: redis:alpine
+    container_name: budget-redis
+    restart: always

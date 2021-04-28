@@ -3,14 +3,12 @@ from typing import Union
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from jose import jwt, JWTError
 from aioredis import Redis
 
-
-from app import banned_token_registry
 from .config import settings
 from .core.database import AsyncSessionLocal, SessionLocal
 from .auth import models as um, schemas as us
@@ -38,36 +36,12 @@ async def get_async_db():
         await db_session.close()
 
 
-def _get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)) -> us.User:
-
-    # Ensure that token is not banned, else raise credential_exception
-    if banned_token_registry.exists(token):
-        raise credentials_exception
-
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY,
-                             settings.SECRET_ALGORITHM)
-        username: Union[str, None] = payload.get('sub')
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    db_user = db.query(um.User).filter(
-        um.User.username == username).first()
-    if db_user is None:
-        raise credentials_exception
-    return us.User.from_orm(db_user)
-
-
 async def get_current_user(
         request: Request,
         token: str = Depends(oauth2_scheme),
         db: AsyncSession = Depends(get_async_db)) -> us.User:
 
-    # Ensure that token is not banned, else raise credential_exception
+    # Ensure that token was not banned, else raise credential_exception
     redis: Redis = request.app.redis
     if await redis.exists(token):
         raise credentials_exception
@@ -91,7 +65,7 @@ async def get_current_user(
 
 def get_admin_user(user: us.User = Depends(get_current_user)) -> us.User:
     if not user.is_admin:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return user
 
 
@@ -120,12 +94,15 @@ async def authenticate_user(
 async def create_user(
         user: us.UserCreate,
         db: AsyncSession = Depends(get_async_db)) -> us.User:
-    stmt = select(um.User).where(um.User.username == user.username)
+    stmt = select(um.User).\
+        where(or_(
+            um.User.username == user.username,
+            um.User.email == user.email))
     result = (await db.execute(stmt)).fetchone()
     if result is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username is in use")
+            detail="username and/or email is not available")
 
     user.password = Password.hash(user.password)
     db_user = um.User(**user.dict(exclude={'password2'}))

@@ -7,9 +7,15 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from app.config import settings
 
 
-engine = create_engine(settings.DB_URI)
-async_engine = create_async_engine(
-    settings.DB_ASYNC_URI, future=True, echo=True)
+DB_URI_SYNC = 'postgresql+psycopg2://{}:{}@{}/{}'.format(
+    settings.DB_USER, settings.DB_PASSWORD, settings.DB_HOST, settings.DB_NAME)
+
+DB_URI_ASYNC = 'postgresql+asyncpg://{}:{}@{}/{}'.format(
+    settings.DB_USER, settings.DB_PASSWORD, settings.DB_HOST, settings.DB_NAME)
+
+
+engine = create_engine(DB_URI_SYNC)
+async_engine = create_async_engine(DB_URI_ASYNC, future=True, echo=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 AsyncSessionLocal = sessionmaker(

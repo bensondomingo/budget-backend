@@ -20,7 +20,7 @@ class UserCreate(UserBase):
         if v != values.get('password'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Passwords didn\'t matched')
+                detail="passwords don't match")
         return v
 
 

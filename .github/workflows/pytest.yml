@@ -1,0 +1,27 @@
+name: Pylint
+
+# Controls when the action will run.
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [master, docker-update]
+  pull_request:
+    branches: [master]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build docker-compose stack
+        run: docker-compose -f docker-compose.test.yaml up -d
+      - name: Check running containers
+        run: docker container ls -a
+      - name: Check backend logs
+        run: docker container logs budget-backend-test
+      - name: Run test suite
+        run: docker-compose -f docker-compose.test.yaml exec backend pytest

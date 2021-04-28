@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    volumes:
+      - ./:/usr/src/app
+    command:
+      [
+        "sh",
+        "-c",
+        "pip install debugpy -t /tmp && python /tmp/debugpy --wait-for-client --listen 0.0.0.0:5678 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+      ]
+    ports:
+      - "8000:8000"
+      - "5678:5678"
+    env_file:
+      - ./.env.dev
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: budget-pgadmin
+    restart: always
+    env_file:
+      - ./.env.dev
+    ports:
+      - "8001:80"
+    volumes:
+      - budget-pgadmin-volume:/var/lib/pgadmin
+    depends_on:
+      - db
+
+  db:
+    image: postgres:alpine
+    container_name: budget-db
+    restart: always
+    env_file:
+      - ./.env.dev
+    volumes:
+      - "budget-db-volume:/var/lib/postgresql/data"
+
+  redis:
+    image: redis:alpine
+    container_name: budget-redis
+    restart: always
+    volumes:
+      - budget-redis-volume:/data
+
+volumes:
+  budget-db-volume:
+    name: budget-db-volume
+  budget-pgadmin-volume:
+    name: budget-pgadmin-volume
+  budget-redis-volume:
+    name: budget-redis-volume

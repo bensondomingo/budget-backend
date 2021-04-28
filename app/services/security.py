@@ -5,7 +5,6 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from aioredis import Redis
 
-# from app import banned_token_registry
 from app.config import settings
 from app.auth import schemas as s
 from app.errors import credentials_exception
