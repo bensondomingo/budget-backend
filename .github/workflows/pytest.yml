@@ -1,4 +1,4 @@
-name: Pylint
+name: Pytest
 
 # Controls when the action will run.
 on:
@@ -24,4 +24,4 @@ jobs:
       - name: Check backend logs
         run: docker container logs budget-backend-test
       - name: Run test suite
-        run: docker-compose -f docker-compose.test.yaml exec backend pytest
+        run: docker container exec -t budget-backend-test pytest
