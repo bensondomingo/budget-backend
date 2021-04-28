@@ -118,4 +118,4 @@ class TestSignUp:
             'username': 'new_user',
             'password': 'test1234'
         })
-        assert resp.status_code == 202
+        assert resp.status_code == 200

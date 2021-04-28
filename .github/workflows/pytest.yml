@@ -21,7 +21,5 @@ jobs:
         run: docker-compose -f docker-compose.test.yaml up -d
       - name: Check running containers
         run: docker container ls -a
-      - name: Check backend logs
-        run: docker container logs budget-backend-test
       - name: Run test suite
-        run: docker container exec -t budget-backend-test pytest
+        run: docker container exec -t budget-backend-test pytest --disable-pytest-warnings
