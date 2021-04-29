@@ -199,6 +199,40 @@ class TestUsers:
                             headers={'Authorization': f'Bearer {token}'})
             assert resp.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_users__change_password(self):
+        with TestClient(app) as c:
+            resp = c.post(f'{url}/auth/signin', data={
+                'username': 'test',
+                'password': 'password'})
+            assert resp.status_code == status.HTTP_202_ACCEPTED
+            token = resp.json().get('access_token')
+
+            resp = c.patch(f'{self.url}/me/password',
+                           json={'password': 'test12345',
+                                 'password2': 'test12345'},
+                           headers={'Authorization': f'Bearer {token}'})
+            assert resp.status_code == status.HTTP_200_OK
+
+            resp = c.patch(f'{self.url}/me/password',
+                           json={'password': 'password',
+                                 'password2': 'password'},
+                           headers={'Authorization': f'Bearer {token}'})
+            assert resp.status_code == status.HTTP_200_OK
+
+    def test_users__change_password__dont_match(self):
+        with TestClient(app) as c:
+            resp = c.post(f'{url}/auth/signin', data={
+                'username': 'test',
+                'password': 'password'})
+            assert resp.status_code == status.HTTP_202_ACCEPTED
+            token = resp.json().get('access_token')
+
+            resp = c.patch(f'{self.url}/me/password',
+                           json={'password': 'test12345',
+                                 'password2': 'test123'},
+                           headers={'Authorization': f'Bearer {token}'})
+            assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
 
 class TestSignIn:
 
@@ -250,7 +284,7 @@ class TestSignIn:
 
 class TestSignUp:
 
-    def test_signup__passwords_mismatched(self):
+    def test_signup__passwords_dont_match(self):
         resp = client.post(f'{url}/auth/signup', json={
             'username': 'testx',
             'email': 'testx@example.com',
@@ -258,7 +292,7 @@ class TestSignUp:
             'password2': 'test1233'})
         detail = resp.json().get('detail')
         assert detail == "passwords don't match"
-        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_signup__taken_username(self):
         resp = client.post(f'{url}/auth/signup', json={
@@ -293,15 +327,6 @@ class TestSignUp:
             'password': 'test1234'
         })
         assert resp.status_code == status.HTTP_202_ACCEPTED
-
-    def test_signup__passwords_mismatch(self):
-        resp = client.post(f'{url}/auth/signup', json={
-            'username': 'new_user',
-            'email': 'new_user@example.com',
-            'password': 'test234',
-            'password2': 'test1234'})
-        assert resp.status_code == status.HTTP_400_BAD_REQUEST
-        assert resp.json().get('detail') == "passwords don't match"
 
 
 class TestSignOut:

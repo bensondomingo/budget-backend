@@ -19,7 +19,21 @@ class UserCreate(UserBase):
     def passwords_must_match(cls, v: str, values: dict):
         if v != values.get('password'):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="passwords don't match")
+        return v
+
+
+class UserChangePassword(BaseModel):
+    password: str = Field(..., min_length=8)
+    password2: str = Field(..., min_length=8)
+
+    @validator('password2')
+    @classmethod
+    def passwords_must_match(cls, v: str, values: dict):
+        if v != values.get('password'):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="passwords don't match")
         return v
 

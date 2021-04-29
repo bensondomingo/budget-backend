@@ -3,12 +3,12 @@ from pydantic.types import UUID4  # pylint: disable=no-name-in-module
 from fastapi.exceptions import HTTPException
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.future import select
+from sqlalchemy import select
 from aioredis import Redis
 
 from app.dependecies import (authenticate_user, create_user,
                              get_admin_user, get_current_user, get_async_db)
-from app.services.security import ban_token, create_access_token, oauth2_scheme
+from app.services.security import Password, ban_token, create_access_token, oauth2_scheme
 from app.auth import models as um
 from . import schemas as s
 
@@ -70,5 +70,16 @@ async def remove_user(
     user = result.User
 
     await db.delete(user)
-    await db.flush()
+    await db.commit()
+
+
+@user_router.patch('/me/password', status_code=status.HTTP_200_OK)
+async def update_password(
+        new_password: s.UserChangePassword,
+        db: AsyncSession = Depends(get_async_db),
+        user: s.User = Depends(get_current_user)):
+    stmt = select(um.User).where(um.User.id == user.id)
+    db_user: um.User = (await db.execute(stmt)).scalar_one()
+    db_user.password = Password.hash(new_password.password)
+    db.add(db_user)
     await db.commit()

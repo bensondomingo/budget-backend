@@ -2,7 +2,9 @@ version: "3.8"
 
 services:
   backend-test:
-    build: .
+    build: 
+      context: .
+      dockerfile: dev.Dockerfile
     container_name: budget-backend-test
     command: "uvicorn app.main:app --host 0.0.0.0 --port 8888 --reload"
     volumes:
@@ -16,6 +18,7 @@ services:
       - REDIS_HOST=redis-test
     ports:
       - "8888:8888"
+      - "5679:5679"
     depends_on:
       - db-test
       - redis-test
