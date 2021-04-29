@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  backend:
+  backend-test:
     build: .
     container_name: budget-backend-test
     command: "uvicorn app.main:app --host 0.0.0.0 --port 8888 --reload"
@@ -11,17 +11,18 @@ services:
       - POSTGRES_DB=budget-test
       - POSTGRES_USER=root
       - POSTGRES_PASSWORD=secret-test
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=db-test
       - POSTGRES_PORT=5432
+      - REDIS_HOST=redis-test
     ports:
-      - "8000:8000"
+      - "8888:8888"
     depends_on:
-      - db
-      - redis
+      - db-test
+      - redis-test
     networks:
       - budget-test-network
 
-  db:
+  db-test:
     image: postgres:alpine
     container_name: budget-db-test
     restart: always
@@ -34,7 +35,7 @@ services:
     networks:
       - budget-test-network
 
-  redis:
+  redis-test:
     image: redis:alpine
     container_name: budget-redis-test
     restart: always

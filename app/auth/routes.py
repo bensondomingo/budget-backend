@@ -20,10 +20,8 @@ user_router = APIRouter(prefix='/users', tags=['Users'])
     '/signin',
     response_model=s.Token,
     status_code=status.HTTP_202_ACCEPTED)
-async def signin(user: s.User = Depends(authenticate_user)):
-    access_token = create_access_token(data={'sub': user.username})
-    token = s.Token(access_token=access_token, token_type='bearer')
-    return token
+async def signin(access_token: str = Depends(authenticate_user)):
+    return s.Token(access_token=access_token, token_type='bearer')
 
 
 @auth_router.post(

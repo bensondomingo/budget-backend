@@ -1,5 +1,6 @@
 """ Project level dependencies lives here """
 from typing import Union
+from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,7 +13,6 @@ from aioredis import Redis
 from .config import settings
 from .core.database import AsyncSessionLocal, SessionLocal
 from .auth import models as um, schemas as us
-from .errors import credentials_exception
 from .services.security import oauth2_scheme, Password
 
 
@@ -44,7 +44,7 @@ async def get_current_user(
     # Ensure that token was not banned, else raise credential_exception
     redis: Redis = request.app.redis
     if await redis.exists(token):
-        raise credentials_exception
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     # Ensure user is a valid db record
     try:
@@ -52,14 +52,14 @@ async def get_current_user(
                              settings.SECRET_ALGORITHM)
         username: Union[str, None] = payload.get('sub')
         if username is None:
-            raise credentials_exception
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     stmt = select(um.User).where(um.User.username == username)
     result = (await db.execute(stmt)).one_or_none()
     if result is None:
-        raise credentials_exception
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     return result.User
 
 
@@ -71,7 +71,7 @@ def get_admin_user(user: us.User = Depends(get_current_user)) -> us.User:
 
 async def authenticate_user(
         db: AsyncSession = Depends(get_async_db),
-        form_data: OAuth2PasswordRequestForm = Depends()) -> us.User:
+        form_data: OAuth2PasswordRequestForm = Depends()) -> str:
     username = form_data.username
     password = form_data.password
     exception = HTTPException(
@@ -88,7 +88,12 @@ async def authenticate_user(
     db_user: um.User = result.User
     if not Password.verify(password, db_user.password):
         raise exception
-    return db_user
+
+    payload = {
+        'sub': db_user.username,
+        'exp': datetime.utcnow() + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)}
+    return jwt.encode(payload, settings.SECRET_KEY, settings.SECRET_ALGORITHM)
 
 
 async def create_user(
