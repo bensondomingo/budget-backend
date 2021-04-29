@@ -8,7 +8,8 @@ from aioredis import Redis
 
 from app.dependecies import (authenticate_user, create_user,
                              get_admin_user, get_current_user, get_async_db)
-from app.services.security import Password, ban_token, create_access_token, oauth2_scheme
+from app.services.security import (
+    ban_token, create_access_token, oauth2_scheme, Password)
 from app.auth import models as um
 from . import schemas as s
 

@@ -18,7 +18,7 @@ from app.dependecies import authenticate_user, get_async_db
 from app.services.security import Password
 
 client = TestClient(app)
-url = 'http://localhost:8000'
+url = f'http://{settings.SERVER_HOST}:{settings.SERVER_PORT}'
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -257,7 +257,7 @@ class TestSignIn:
         assert exp.seconds // 60 >= settings.ACCESS_TOKEN_EXPIRE_MINUTES - 5
 
     def test_signin__user_not_registered(self):
-        resp = client.post(f'{url}/auth/signin', data={
+        resp = client.post(self.url, data={
             'username': 'randomuser',
             'password': 'password'
         })
@@ -265,7 +265,7 @@ class TestSignIn:
 
     def test_signin__expired_token(self, shorten_token_validity):
         with TestClient(app) as c:
-            resp = c.post(f'{url}/auth/signin', data={
+            resp = c.post(self.url, data={
                 'username': 'test',
                 'password': 'password'
             })
@@ -284,8 +284,10 @@ class TestSignIn:
 
 class TestSignUp:
 
+    url = f'{url}/auth/signup'
+
     def test_signup__passwords_dont_match(self):
-        resp = client.post(f'{url}/auth/signup', json={
+        resp = client.post(self.url, json={
             'username': 'testx',
             'email': 'testx@example.com',
             'password': 'test1234',
@@ -295,7 +297,7 @@ class TestSignUp:
         assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_signup__taken_username(self):
-        resp = client.post(f'{url}/auth/signup', json={
+        resp = client.post(self.url, json={
             'username': 'test',
             'email': 'testx@example.com',
             'password': 'test1234',
@@ -305,7 +307,7 @@ class TestSignUp:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_signup__taken_email(self):
-        resp = client.post(f'{url}/auth/signup', json={
+        resp = client.post(self.url, json={
             'username': 'testx',
             'email': 'test@example.com',
             'password': 'test1234',
@@ -315,7 +317,7 @@ class TestSignUp:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_signup__valid_inputs(self, signup_cleanup):
-        resp = client.post(f'{url}/auth/signup', json={
+        resp = client.post(self.url, json={
             'username': 'new_user',
             'email': 'new_user@example.com',
             'password': 'test1234',
@@ -330,6 +332,8 @@ class TestSignUp:
 
 
 class TestSignOut:
+
+    url = f'{url}/auth/signout'
 
     def test_signout__signedin_user(self):
         with TestClient(app) as c:
@@ -347,7 +351,7 @@ class TestSignOut:
             assert resp.status_code == status.HTTP_200_OK
 
             # Signout
-            resp = c.post(f'{url}/auth/signout',
+            resp = c.post(self.url,
                           headers={'Authorization': f'Bearer {token}'})
             assert resp.status_code == status.HTTP_204_NO_CONTENT
 
@@ -359,5 +363,5 @@ class TestSignOut:
 
     def test_signout__not_authenticated_user(self):
         with TestClient(app) as c:
-            resp = c.post(f'{url}/auth/signout')
+            resp = c.post(self.url)
             assert resp.status_code == status.HTTP_401_UNAUTHORIZED
