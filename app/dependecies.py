@@ -1,19 +1,19 @@
 """ Project level dependencies lives here """
 from typing import Union
-from datetime import datetime, timedelta
 
+from aioredis import Redis
+from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from jose import jwt, JWTError
-from aioredis import Redis
 
+from .auth import models as um, schemas as us
 from .config import settings
 from .core.database import AsyncSessionLocal, SessionLocal
-from .auth import models as um, schemas as us
-from .services.security import oauth2_scheme, Password
+from .services.security import (
+    create_access_token, oauth2_scheme, Password, Payload)
 
 
 def get_db():
@@ -88,12 +88,8 @@ async def authenticate_user(
     db_user: um.User = result.User
     if not Password.verify(password, db_user.password):
         raise exception
-
-    payload = {
-        'sub': db_user.username,
-        'exp': datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)}
-    return jwt.encode(payload, settings.SECRET_KEY, settings.SECRET_ALGORITHM)
+    payload = Payload(uid=str(db_user.id), sub=db_user.username)
+    return create_access_token(payload)
 
 
 async def create_user(
@@ -112,6 +108,5 @@ async def create_user(
     user.password = Password.hash(user.password)
     db_user = um.User(**user.dict(exclude={'password2'}))
     db.add(db_user)
-    await db.flush()
     await db.commit()
     return db_user

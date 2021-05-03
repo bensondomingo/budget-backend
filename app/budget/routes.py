@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.status import HTTP_200_OK
 
 from app.auth import schemas as us
+from app.config import settings
 from app.dependecies import get_async_db, get_current_user
 from app.services.utils import (
     generate_page_meta, get_default_date_range, populate_transaction_schema)
@@ -24,7 +25,7 @@ transactions_router = APIRouter(prefix='/transactions', tags=['transactions'])
 
 
 @budget_router.get(
-    '/', response_model=s.PaginatedBudgets,
+    '', response_model=s.PaginatedBudgets,
     status_code=status.HTTP_200_OK)
 async def read_user_budgets(
         request: Request,
@@ -32,12 +33,14 @@ async def read_user_budgets(
         limit: int = 100,
         db: AsyncSession = Depends(get_async_db),
         user: us.User = Depends(get_current_user),
+        month: date = Query(None, description='YYYY-MM-01'),
         category: Optional[List[str]] = Query(
             None, description='income | deductions | expenses | savings',
             regex='^income$|^deductions$|^expenses$|^savings$')):
 
-    stmt = select(m.Budget).where(
-        m.Budget.user_id == user.id)
+    stmt = select(m.Budget).filter_by(user_id=user.id)
+    if month is not None:
+        stmt = stmt.where(m.Budget.month == month)
     if category is not None:
         stmt = stmt.where(m.Budget.category.in_(category))
     subq = aliased(m.Budget, stmt.subquery())
@@ -53,7 +56,7 @@ async def read_user_budgets(
 
 
 @budget_router.post(
-    '/', response_model=s.Budget,
+    '', response_model=s.Budget,
     status_code=status.HTTP_201_CREATED)
 async def add_budget(
         budget: s.BudgetCreate,
@@ -108,12 +111,12 @@ async def remove_budget(budget: m.Budget = Depends(get_budget),
 
 
 @transactions_router.get(
-    '/', response_model=s.PaginatedTransactions,
+    '', response_model=s.PaginatedTransactions,
     status_code=HTTP_200_OK)
 async def read_transactions(
         request: Request,
-        offset: int = 0,
-        limit: int = 100,
+        offset: int = settings.PAGE_OFFSET,
+        limit: int = settings.PAGE_LIMIT,
         start: date = Query(get_default_date_range().start),
         end: date = Query(get_default_date_range().end),
         category: str = Query(None),

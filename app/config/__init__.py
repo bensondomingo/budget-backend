@@ -32,11 +32,17 @@ class RedisSettings(BaseSettings):
     REDIS_BANNED_TOKEN_REGISTRY_DB: int = 1
 
 
+class PaginationSettings(BaseSettings):
+    PAGE_OFFSET: int = 0
+    PAGE_LIMIT: int = 100
+
+
 class Settings(CommonSettings,
                ServerSettings,
                DatabaseSettings,
                SecuritySettings,
-               RedisSettings):
+               RedisSettings,
+               PaginationSettings):
     """
     Project settings. https://pydantic-docs.helpmanual.io/usage/settings/
     """

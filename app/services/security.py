@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
+from typing import Optional
 
+from aioredis import Redis
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from aioredis import Redis
+from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 from app.config import settings
 from app.auth import schemas as s
@@ -13,6 +15,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl='auth/signin')
 
 pwd_context = CryptContext(
     schemes=[settings.PWD_HASH_SCHEME], deprecated='auto')
+
+
+class Payload(BaseModel):
+    uid: str
+    sub: str
+    exp: Optional[int]
 
 
 class Password:
@@ -29,11 +37,11 @@ class Password:
         return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(data: dict):
-    payload = data.copy()
-    payload.update({'exp': datetime.utcnow() +
-                   timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)})
-    token = jwt.encode(payload, settings.SECRET_KEY, settings.SECRET_ALGORITHM)
+def create_access_token(payload: Payload):
+    payload.exp = datetime.utcnow() + \
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = jwt.encode(
+        payload.dict(), settings.SECRET_KEY, settings.SECRET_ALGORITHM)
     return token
 
 

@@ -14,8 +14,9 @@ async def get_budget(
         budget_id: UUID4,
         db: AsyncSession = Depends(get_async_db),
         user: us.User = Depends(get_current_user)) -> m.Budget:
-    stmt = select(m.Budget).where(
-        m.Budget.user_id == user.id).where(m.Budget.id == budget_id)
+    # stmt = select(m.Budget).where(
+    #     m.Budget.user_id == user.id).where(m.Budget.id == budget_id)
+    stmt = select(m.Budget).filter_by(id=budget_id, user_id=user.id)
     result = (await db.execute(stmt)).one_or_none()
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

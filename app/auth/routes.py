@@ -9,7 +9,7 @@ from aioredis import Redis
 from app.dependecies import (authenticate_user, create_user,
                              get_admin_user, get_current_user, get_async_db)
 from app.services.security import (
-    ban_token, create_access_token, oauth2_scheme, Password)
+    Payload, ban_token, create_access_token, oauth2_scheme, Password)
 from app.auth import models as um
 from . import schemas as s
 
@@ -20,7 +20,7 @@ user_router = APIRouter(prefix='/users', tags=['Users'])
 @auth_router.post(
     '/signin',
     response_model=s.Token,
-    status_code=status.HTTP_202_ACCEPTED)
+    status_code=status.HTTP_200_OK)
 async def signin(access_token: str = Depends(authenticate_user)):
     return s.Token(access_token=access_token, token_type='bearer')
 
@@ -30,9 +30,9 @@ async def signin(access_token: str = Depends(authenticate_user)):
     response_model=s.Token,
     status_code=status.HTTP_201_CREATED)
 async def signup(user: s.User = Depends(create_user)):
-    access_token = create_access_token(data={'sub': user.username})
-    token = s.Token(access_token=access_token, token_type='bearer')
-    return token
+    payload = Payload(uid=str(user.id), sub=user.username)
+    token = create_access_token(payload)
+    return s.Token(access_token=token, token_type='bearer')
 
 
 @auth_router.post('/signout', status_code=status.HTTP_204_NO_CONTENT)
@@ -48,7 +48,7 @@ async def read_users_me(user: s.User = Depends(get_current_user)):
 
 
 @user_router.get(
-    '/', response_model=Sequence[s.User],
+    '', response_model=Sequence[s.User],
     dependencies=[Depends(get_admin_user)],
     status_code=status.HTTP_200_OK)
 async def read_users(

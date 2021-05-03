@@ -13,40 +13,13 @@ from sqlalchemy.sql.expression import delete, select
 from app.main import app
 from app.auth import models as m_auth
 from app.config import settings
-from app.core.database import AsyncSession, Base, engine, SessionLocal
+from app.core.database import AsyncSession,  SessionLocal
 from app.dependecies import authenticate_user, get_async_db
 from app.services.security import Password
+from . import setup_teardown_database  # pylint: disable=unused-import
 
 client = TestClient(app)
 url = f'http://{settings.SERVER_HOST}:{settings.SERVER_PORT}'
-
-
-@pytest.fixture(scope='module', autouse=True)
-def setup_teardown_database():
-    """
-    Handles creation and cleanup of database
-    """
-    # Create database tables
-    Base.metadata.create_all(engine)
-
-    # Create test users
-    admin_user = m_auth.User()
-    admin_user.username = 'admin'
-    admin_user.email = 'admin@example.com'
-    admin_user.password = Password.hash('password')
-    admin_user.is_admin = True
-
-    test_user = m_auth.User()
-    test_user.username = 'test'
-    test_user.email = 'test@example.com'
-    test_user.password = Password.hash('password')
-    with SessionLocal() as db:
-        db.add(admin_user)
-        db.add(test_user)
-        db.commit()
-
-    yield None
-    Base.metadata.drop_all(engine)
 
 
 @ pytest.fixture(scope='function')
@@ -101,7 +74,7 @@ class TestUsers:
                 'username': 'test',
                 'password': 'password'
             })
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
             assert token is not None
             print(token)
@@ -121,7 +94,7 @@ class TestUsers:
             resp = c.post(f'{url}/auth/signin', data={
                 'username': 'admin',
                 'password': 'password'})
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             resp = c.get(self.url, headers={
@@ -134,7 +107,7 @@ class TestUsers:
             resp = c.post(f'{url}/auth/signin', data={
                 'username': 'test',
                 'password': 'password'})
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             resp = c.get(self.url, headers={
@@ -162,7 +135,7 @@ class TestUsers:
             resp = c.post(f'{url}/auth/signin', data={
                 'username': 'admin',
                 'password': 'password'})
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             # delete user
@@ -191,7 +164,7 @@ class TestUsers:
             resp = c.post(f'{url}/auth/signin', data={
                 'username': 'test',
                 'password': 'password'})
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             # delete user
@@ -204,7 +177,7 @@ class TestUsers:
             resp = c.post(f'{url}/auth/signin', data={
                 'username': 'test',
                 'password': 'password'})
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             resp = c.patch(f'{self.url}/me/password',
@@ -224,7 +197,7 @@ class TestUsers:
             resp = c.post(f'{url}/auth/signin', data={
                 'username': 'test',
                 'password': 'password'})
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             resp = c.patch(f'{self.url}/me/password',
@@ -243,7 +216,7 @@ class TestSignIn:
             'username': 'test',
             'password': 'password'
         })
-        assert resp.status_code == status.HTTP_202_ACCEPTED
+        assert resp.status_code == status.HTTP_200_OK
 
         # test token payload
         data = resp.json()
@@ -269,7 +242,7 @@ class TestSignIn:
                 'username': 'test',
                 'password': 'password'
             })
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
 
             resp = c.get(f'{url}/users/me',
@@ -328,7 +301,7 @@ class TestSignUp:
             'username': 'new_user',
             'password': 'test1234'
         })
-        assert resp.status_code == status.HTTP_202_ACCEPTED
+        assert resp.status_code == status.HTTP_200_OK
 
 
 class TestSignOut:
@@ -342,7 +315,7 @@ class TestSignOut:
                 'username': 'test',
                 'password': 'password'
             })
-            assert resp.status_code == status.HTTP_202_ACCEPTED
+            assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')  # Get token
 
             # Access an auth protected endpoint

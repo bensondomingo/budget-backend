@@ -56,4 +56,5 @@ class Transaction(Base):
 
     # Foreign Keys
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
-    budget_id = Column(UUID(as_uuid=True), ForeignKey('budgets.id'))
+    budget_id = Column(UUID(as_uuid=True), ForeignKey(
+        'budgets.id'), nullable=True)

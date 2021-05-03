@@ -1,11 +1,19 @@
 # pylint: disable=no-name-in-module
 import calendar
 from datetime import date as Date
-from typing import Sequence
+from typing import Optional, Sequence
 from urllib.parse import urlencode, urljoin
-from pydantic import AnyHttpUrl, BaseModel, Field
-from sqlalchemy.engine.row import Row
+
 from fastapi.requests import Request
+from sqlalchemy.engine.row import Row
+from pydantic import AnyHttpUrl, BaseModel, Field, PositiveInt
+
+from app.config import settings
+
+
+class YearMonth(BaseModel):
+    year: Optional[PositiveInt] = Date.today().year
+    month: Optional[PositiveInt] = Date.today().month
 
 
 class DateRange(BaseModel):
@@ -24,9 +32,9 @@ class PageMeta(BaseModel):
     nxt: AnyHttpUrl = Field(None)
 
 
-def get_default_date_range() -> DateRange:
-    year = Date.today().year
-    month = Date.today().month
+def get_default_date_range(my: YearMonth = YearMonth()) -> DateRange:
+    year = my.year
+    month = my.month
     last_day = calendar.monthrange(year, month)[1]
     start = Date.fromisoformat(f'{year}-{month:02}-01')
     end = Date.fromisoformat(f'{year}-{month:02}-{last_day:02}')
@@ -44,8 +52,8 @@ def populate_transaction_schema(
 
 def generate_page_meta(request: Request, row_count: int):
     qp = {**request.query_params}
-    limit = qp['limit'] = int(qp['limit'])
-    offset = qp['offset'] = int(qp['offset'])
+    limit = qp['limit'] = int(qp.get('limit', settings.PAGE_LIMIT))
+    offset = qp['offset'] = int(qp.get('offset', settings.PAGE_OFFSET))
 
     prv = nxt = None
     if limit + offset < row_count:
