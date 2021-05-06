@@ -148,7 +148,8 @@ class TestCreateBudgets:
         with TestClient(app) as c:
             resp = c.post(self.url, headers=get_auth_header__test_user, json={
                 'name': 'test-expenses-1',
-                'planned_amount': 1000
+                'planned_amount': 1000,
+                'examples': ['example1', 'example2']
             })
             assert resp.status_code == status.HTTP_201_CREATED
 
@@ -156,6 +157,7 @@ class TestCreateBudgets:
             assert data['name'] == 'test-expenses-1'
             assert data['category'] == 'expenses'
             assert data['planned_amount'] == 1000
+            assert data['examples'] == ['example1', 'example2']
             assert data['month'] == str(get_default_date_range().start)
             created_at = datetime.fromisoformat(data['created_at'])
             updated_at = datetime.fromisoformat(data['updated_at'])
@@ -306,7 +308,7 @@ class TestPatchBudget:
                                'planned_amount': 20000,
                                'category': 'income',
                                'description': 'test description',
-                               'examples': 'test, examples',
+                               'examples': ['ex1', 'ex2'],
                                'month': '2021-04-01'})
             assert resp.status_code == status.HTTP_200_OK
 
@@ -317,7 +319,7 @@ class TestPatchBudget:
             assert budget['planned_amount'] == 20000
             assert budget['category'] == 'income'
             assert budget['description'] == 'test description'
-            assert budget['examples'] == 'test, examples'
+            assert budget['examples'] == ['ex1', 'ex2']
             assert budget['month'] == '2021-04-01'
 
             updated_at = datetime.fromisoformat(budget['updated_at'])
@@ -403,7 +405,7 @@ class TestPatchBudget:
             # Update budget examples
             resp = c.patch(f"{self.url}/{budget['id']}",
                            headers=get_auth_header__test_user, json={
-                               'examples': 'ex1, ex2, ex3'})
+                               'examples': ['ex1', 'ex2', 'ex3']})
             assert resp.status_code == status.HTTP_200_OK
             resp = c.get(f"{self.url}/{budget['id']}",
                          headers=get_auth_header__test_user)
@@ -413,7 +415,7 @@ class TestPatchBudget:
             assert updated_budget['planned_amount'] == 5000
             assert updated_budget['category'] == 'income'
             assert updated_budget['description'] == 'description__updated'
-            assert updated_budget['examples'] == 'ex1, ex2, ex3'
+            assert updated_budget['examples'] == ['ex1', 'ex2', 'ex3']
             assert updated_budget.get('month') == str(
                 get_default_date_range().start)
 
@@ -432,5 +434,5 @@ class TestPatchBudget:
             assert updated_budget['planned_amount'] == 5000
             assert updated_budget['category'] == 'income'
             assert updated_budget['description'] == 'description__updated'
-            assert updated_budget['examples'] == 'ex1, ex2, ex3'
+            assert updated_budget['examples'] == ['ex1', 'ex2', 'ex3']
             assert updated_budget['month'] == month

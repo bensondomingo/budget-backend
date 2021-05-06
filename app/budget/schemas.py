@@ -23,7 +23,8 @@ class BudgetBase(BaseModel):
         description='|'.join([k.value for k in BudgetCategoryEnum]),
         regex='|'.join([f'^{k.value}$' for k in BudgetCategoryEnum]))
     description: str = Field(None)
-    examples: str = Field(None, description='value1,value2,value3')
+    examples: List[str] = Field(
+        None, description='List of possible transactions')
     planned_amount: float = Field(..., ge=0)
     month: Date = Field(get_default_date_range().start)
 

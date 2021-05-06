@@ -3,7 +3,7 @@ from datetime import date
 
 from sqlalchemy import (Column, Date, Enum, Float, ForeignKey, func,
                         String, TIMESTAMP, UniqueConstraint)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -19,7 +19,7 @@ class Budget(Base):
     name = Column(String(50), index=True, nullable=False)
     category = Column(Enum(BudgetCategoryEnum), index=True, nullable=False)
     description = Column(String(200))
-    examples = Column(String(300))
+    examples = Column(ARRAY(String))
     planned_amount = Column(Float, nullable=False)
     month = Column(Date, default=get_default_date_range().start)
 
