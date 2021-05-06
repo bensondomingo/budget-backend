@@ -77,7 +77,6 @@ class TestUsers:
             assert resp.status_code == status.HTTP_200_OK
             token = resp.json().get('access_token')
             assert token is not None
-            print(token)
 
             resp = c.get(f'{self.url}/me',
                          headers={'Authorization': f'Bearer {token}'})

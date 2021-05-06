@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.engine.row import Row
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql.expression import update
 from starlette.requests import Request
 from starlette.status import HTTP_200_OK
 
@@ -63,13 +64,11 @@ async def add_budget(
         db: AsyncSession = Depends(get_async_db),
         user: us.User = Depends(get_current_user)):
 
-    stmt = select(m.Budget).\
-        where(m.Budget.name == budget.name).\
-        where(m.Budget.month == budget.month)
+    stmt = select(m.Budget).filter_by(name=budget.name, month=budget.month)
     result = (await db.execute(stmt)).one_or_none()
     if result is not None:
-        raise HTTPException(
-            status_code=400, detail="Budget name already exists")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Budget name already exists")
 
     db_budget = m.Budget(**budget.dict(), user_id=user.id)
     db.add(db_budget)
@@ -88,15 +87,11 @@ async def update_budget(
         budget_model: m.Budget = Depends(get_budget),
         db: AsyncSession = Depends(get_async_db)):
 
-    if budget_schema.name:
-        budget_model.name = budget_schema.name
-    if budget_schema.category:
-        budget_model.category = budget_schema.category
-    if budget_schema.planned_amount:
-        budget_model.planned_amount = budget_schema.planned_amount
-    if budget_schema.examples:
-        budget_model.examples = budget_schema.examples
-    db.add(budget_model)
+    update_data = budget_schema.dict(exclude_unset=True)
+    stmt = update(m.Budget).where(
+        m.Budget.id == budget_model.id).values(**update_data)
+
+    await db.execute(stmt)
     await db.commit()
     return budget_model
 

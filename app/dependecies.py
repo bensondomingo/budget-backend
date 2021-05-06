@@ -20,7 +20,6 @@ def get_db():
     """
     https://fastapi.tiangolo.com/tutorial/sql-databases/#create-a-dependency
     """
-
     db_session = SessionLocal()
     try:
         yield db_session

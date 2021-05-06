@@ -1,7 +1,6 @@
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Boolean, Column, TIMESTAMP, String
+from sqlalchemy import Boolean, Column, func, TIMESTAMP, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -20,12 +19,14 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
 
     # Timestamps
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow())
-    updated_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow(),
-                        onupdate=datetime.utcnow())
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True),
+                        server_default=func.now(), onupdate=func.now())
 
     # Relationships
     budgets = relationship('Budget', backref='users',
                            cascade='all, delete-orphan')
     transactions = relationship(
         'Transaction', backref='users', cascade='all, delete-orphan')
+
+    __mapper_args__ = {"eager_defaults": True}

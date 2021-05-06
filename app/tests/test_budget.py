@@ -1,6 +1,9 @@
 # pylint: disable=unused-argument
 # pylint: disable=redefined-outer-name
+# pylint: disable=too-many-statements
+from datetime import datetime
 from uuid import uuid4
+
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -154,6 +157,9 @@ class TestCreateBudgets:
             assert data['category'] == 'expenses'
             assert data['planned_amount'] == 1000
             assert data['month'] == str(get_default_date_range().start)
+            created_at = datetime.fromisoformat(data['created_at'])
+            updated_at = datetime.fromisoformat(data['updated_at'])
+            assert created_at == updated_at
 
             token = get_auth_header__test_user.get(
                 'Authorization').replace('Bearer ', '')
@@ -166,6 +172,7 @@ class TestCreateBudgets:
 
     def test_create__invalid_input(self, get_auth_header__test_user):
         with TestClient(app) as c:
+            # no name
             resp = c.post(self.url, headers=get_auth_header__test_user, json={
                 'category': 'expenses',
                 'planned_amount': 1000,
@@ -173,10 +180,35 @@ class TestCreateBudgets:
             })
             assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
+            # no planned_amount
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-expenses-1',
+                'planned_amount': -1,
+                'category': 'expenses',
+                'month': str(get_default_date_range().start)
+            })
+            assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+            # negative planned amount
             resp = c.post(self.url, headers=get_auth_header__test_user, json={
                 'name': 'test-expenses-1',
                 'category': 'expenses',
                 'month': str(get_default_date_range().start)
+            })
+            assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_create__budget_already_exists_this_month(
+            self, get_auth_header__test_user, budget_create_cleanup):
+        with TestClient(app) as c:
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-expenses-1',
+                'planned_amount': 1000
+            })
+            assert resp.status_code == status.HTTP_201_CREATED
+
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-expenses-1',
+                'planned_amount': 1000
             })
             assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -226,3 +258,179 @@ class TestDeleteBudget:
             resp = c.get(f"{self.url}/{budget['id']}",
                          headers=get_auth_header__test_user)
             assert resp.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete__budget_not_owned_by_user(
+            self, get_auth_header__test_user,
+            get_auth_header__admin_user, budget_create_cleanup):
+        with TestClient(app) as c:
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-expenses-1', 'planned_amount': 1000})
+            assert resp.status_code == status.HTTP_201_CREATED
+            budget = resp.json()
+
+            resp = c.delete(f"{self.url}/{budget['id']}",
+                            headers=get_auth_header__admin_user)
+            assert resp.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_delete__not_authenticated(
+            self, get_auth_header__test_user, budget_create_cleanup):
+        with TestClient(app) as c:
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-expenses-1', 'planned_amount': 1000})
+            assert resp.status_code == status.HTTP_201_CREATED
+            budget = resp.json()
+
+            resp = c.delete(f"{self.url}/{budget['id']}")
+            assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestPatchBudget:
+
+    url = url = f'{url}/budgets'
+
+    def test_patch__budget_owned_by_user(
+            self, get_auth_header__test_user, budget_create_cleanup):
+        with TestClient(app) as c:
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-expenses-1', 'planned_amount': 1000})
+            assert resp.status_code == status.HTTP_201_CREATED
+            budget = resp.json()
+            created_at = datetime.fromisoformat(budget['created_at'])
+            updated_at = datetime.fromisoformat(budget['updated_at'])
+            assert created_at == updated_at
+
+            # Update the record
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'name': 'test-income-1',
+                               'planned_amount': 20000,
+                               'category': 'income',
+                               'description': 'test description',
+                               'examples': 'test, examples',
+                               'month': '2021-04-01'})
+            assert resp.status_code == status.HTTP_200_OK
+
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            budget = resp.json()
+            assert budget['name'] == 'test-income-1'
+            assert budget['planned_amount'] == 20000
+            assert budget['category'] == 'income'
+            assert budget['description'] == 'test description'
+            assert budget['examples'] == 'test, examples'
+            assert budget['month'] == '2021-04-01'
+
+            updated_at = datetime.fromisoformat(budget['updated_at'])
+            assert created_at == datetime.fromisoformat(budget['created_at'])
+            assert updated_at > created_at
+
+    def test_patch__test_update_per_field(
+            self, get_auth_header__test_user, budget_create_cleanup):
+        with TestClient(app) as c:
+            resp = c.post(self.url, headers=get_auth_header__test_user, json={
+                'name': 'test-budget', 'planned_amount': 1000})
+            assert resp.status_code == status.HTTP_201_CREATED
+            budget = resp.json()
+
+            # Update budget name
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'name': 'test-budget__updated'})
+            assert resp.status_code == status.HTTP_200_OK
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            assert resp.status_code == status.HTTP_200_OK
+            updated_budget = resp.json()
+            assert updated_budget['name'] == 'test-budget__updated'
+            assert updated_budget['planned_amount'] == 1000
+            assert updated_budget['category'] == 'expenses'
+            assert updated_budget.get('description') is None
+            assert updated_budget.get('examples') is None
+            assert updated_budget.get('month') == str(
+                get_default_date_range().start)
+
+            # Update budget category
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'category': 'income'})
+            assert resp.status_code == status.HTTP_200_OK
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            assert resp.status_code == status.HTTP_200_OK
+            updated_budget = resp.json()
+            assert updated_budget['name'] == 'test-budget__updated'
+            assert updated_budget['planned_amount'] == 1000
+            assert updated_budget['category'] == 'income'
+            assert updated_budget.get('description') is None
+            assert updated_budget.get('examples') is None
+            assert updated_budget.get('month') == str(
+                get_default_date_range().start)
+
+            # Update budget planned_amount
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'planned_amount': 5000})
+            assert resp.status_code == status.HTTP_200_OK
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            assert resp.status_code == status.HTTP_200_OK
+            updated_budget = resp.json()
+            assert updated_budget['name'] == 'test-budget__updated'
+            assert updated_budget['planned_amount'] == 5000
+            assert updated_budget['category'] == 'income'
+            assert updated_budget.get('description') is None
+            assert updated_budget.get('examples') is None
+            assert updated_budget.get('month') == str(
+                get_default_date_range().start)
+
+            # Update budget description
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'description': 'description__updated'})
+            assert resp.status_code == status.HTTP_200_OK
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            assert resp.status_code == status.HTTP_200_OK
+            updated_budget = resp.json()
+            assert updated_budget['name'] == 'test-budget__updated'
+            assert updated_budget['planned_amount'] == 5000
+            assert updated_budget['category'] == 'income'
+            assert updated_budget['description'] == 'description__updated'
+            assert updated_budget.get('examples') is None
+            assert updated_budget.get('month') == str(
+                get_default_date_range().start)
+
+            # Update budget examples
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'examples': 'ex1, ex2, ex3'})
+            assert resp.status_code == status.HTTP_200_OK
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            assert resp.status_code == status.HTTP_200_OK
+            updated_budget = resp.json()
+            assert updated_budget['name'] == 'test-budget__updated'
+            assert updated_budget['planned_amount'] == 5000
+            assert updated_budget['category'] == 'income'
+            assert updated_budget['description'] == 'description__updated'
+            assert updated_budget['examples'] == 'ex1, ex2, ex3'
+            assert updated_budget.get('month') == str(
+                get_default_date_range().start)
+
+            # Update budget month
+            month = get_default_date_range().start
+            month = str(month.replace(month=month.month + 1))
+            resp = c.patch(f"{self.url}/{budget['id']}",
+                           headers=get_auth_header__test_user, json={
+                               'month': month})
+            assert resp.status_code == status.HTTP_200_OK
+            resp = c.get(f"{self.url}/{budget['id']}",
+                         headers=get_auth_header__test_user)
+            assert resp.status_code == status.HTTP_200_OK
+            updated_budget = resp.json()
+            assert updated_budget['name'] == 'test-budget__updated'
+            assert updated_budget['planned_amount'] == 5000
+            assert updated_budget['category'] == 'income'
+            assert updated_budget['description'] == 'description__updated'
+            assert updated_budget['examples'] == 'ex1, ex2, ex3'
+            assert updated_budget['month'] == month

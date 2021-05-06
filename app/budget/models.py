@@ -1,11 +1,10 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 
-from sqlalchemy import (Column, Enum, Float, ForeignKey,
+from sqlalchemy import (Column, Date, Enum, Float, ForeignKey, func,
                         String, TIMESTAMP, UniqueConstraint)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql.sqltypes import Date
 
 from app.core.database import Base
 from app.services.utils import get_default_date_range
@@ -25,9 +24,9 @@ class Budget(Base):
     month = Column(Date, default=get_default_date_range().start)
 
     # Timestamps
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow())
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True),
-                        default=datetime.utcnow(), onupdate=datetime.utcnow())
+                        server_default=func.now(), onupdate=func.now())
 
     # Foreign Keys
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
@@ -35,9 +34,8 @@ class Budget(Base):
     # Relationships
     transactions = relationship('Transaction', backref='budgets')
 
-    __table_args__ = (
-        UniqueConstraint('name', 'month'),
-    )
+    __mapper_args__ = {"eager_defaults": True}
+    __table_args__ = (UniqueConstraint('name', 'month'),)
 
 
 class Transaction(Base):
@@ -50,11 +48,13 @@ class Transaction(Base):
     description = Column(String(100), nullable=False)
 
     # Timestamps
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow())
-    updated_at = Column(TIMESTAMP(timezone=True), default=datetime.now(
-        timezone.utc), onupdate=datetime.utcnow())
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True),
+                        server_default=func.now(), onupdate=func.now())
 
     # Foreign Keys
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
     budget_id = Column(UUID(as_uuid=True), ForeignKey(
         'budgets.id'), nullable=True)
+
+    __mapper_args__ = {"eager_defaults": True}
