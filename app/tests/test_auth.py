@@ -2,31 +2,34 @@
 # pylint: disable=redefined-outer-name
 from datetime import datetime, timedelta
 from time import sleep as delay
-import pytest
 
-from jose import jwt
+import pytest
 from fastapi import status, Depends, HTTPException
 from fastapi.testclient import TestClient
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import jwt
+from redis import Redis
 from sqlalchemy.sql.expression import delete, select
 
-from app.main import app
-from app.auth import models as m_auth
+from app.auth.models import User as UserModel
 from app.config import settings
-from app.core.database import AsyncSession,  SessionLocal
+from app.core.database import AsyncSession, SessionLocal
 from app.dependecies import authenticate_user, get_async_db
+from app.main import app
 from app.services.security import Password
-from . import setup_teardown_database  # pylint: disable=unused-import
+
 
 client = TestClient(app)
+redis = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT,
+              db=settings.REDIS_BANNED_TOKEN_REGISTRY_DB)
 url = f'http://{settings.SERVER_HOST}:{settings.SERVER_PORT}'
 
 
 @ pytest.fixture(scope='function')
 def signup_cleanup():
     yield None
-    stmt = delete(m_auth.User).where(
-        ~m_auth.User.username.in_(['admin', 'test']))
+    stmt = delete(UserModel).where(
+        ~UserModel.username.in_(['admin', 'test']))
     with SessionLocal() as db:
         db.execute(stmt)
         db.commit()
@@ -44,12 +47,12 @@ def shorten_token_validity():
         password = form_data.password
         exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-        stmt = select(m_auth.User).where(m_auth.User.username == username)
+        stmt = select(UserModel).where(UserModel.username == username)
         result = (await db.execute(stmt)).one_or_none()
         if result is None:
             raise exception
 
-        db_user: m_auth.User = result.User
+        db_user: UserModel = result.User
         if not Password.verify(password, db_user.password):
             raise exception
 
@@ -62,6 +65,15 @@ def shorten_token_validity():
     app.dependency_overrides[authenticate_user] = test_authenticate_user
     yield
     app.dependency_overrides[authenticate_user] = authenticate_user
+
+
+@pytest.fixture(scope='function')
+def clear_banned_tokens():
+    """
+    Use to cleanup signouts
+    """
+    yield None
+    redis.flushdb()
 
 
 class TestUsers:
@@ -307,7 +319,7 @@ class TestSignOut:
 
     url = f'{url}/auth/signout'
 
-    def test_signout__signedin_user(self):
+    def test_signout__signedin_user(self, clear_banned_tokens):
         with TestClient(app) as c:
             # Signin
             resp = c.post(f'{url}/auth/signin', data={

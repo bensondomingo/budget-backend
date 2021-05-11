@@ -4,16 +4,14 @@ from datetime import date as Date, datetime
 
 from pydantic import BaseModel, Field, PositiveFloat, UUID4  # pylint: disable=no-name-in-module
 
-from app.services.utils import get_default_date_range, PageMeta
+from app.services.utils import get_date_range, PageMeta
 
 T = TypeVar('T')
 
 
 class BudgetCategoryEnum(str, enum.Enum):
     inc = 'income'
-    ded = 'deductions'
     exp = 'expenses'
-    sav = 'savings'
 
 
 class BudgetBase(BaseModel):
@@ -26,7 +24,7 @@ class BudgetBase(BaseModel):
     examples: List[str] = Field(
         None, description='List of possible transactions')
     planned_amount: float = Field(..., ge=0)
-    month: Date = Field(get_default_date_range().start)
+    month: Date = Field(get_date_range().start)
 
 
 class BudgetCreate(BudgetBase):
@@ -62,6 +60,13 @@ class TransactionCreate(TransactionBase):
     pass
 
 
+class TransactionUpdate(BaseModel):
+    amount: PositiveFloat = Field(None)
+    description: str = Field(None, max_length=100)
+    date: Date = Field(None)
+    budget_id: UUID4 = Field(None)
+
+
 class TransactcionUpdate(TransactionBase):
     amount: PositiveFloat = Field(None)
     description: str = Field(None, max_length=100)
@@ -73,7 +78,7 @@ class Transaction(TransactionBase):
     id: UUID4 = Field(...)
     user_id: UUID4 = Field(...)
     budget_id: UUID4 = Field(...)
-    budget: str = Field(None)
+    budget_name: str = Field(None)
     category: str = Field(None)
     created_at: datetime = Field(...)
     updated_at: datetime = Field(...)

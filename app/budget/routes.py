@@ -4,9 +4,9 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.param_functions import Query
+from pydantic.types import UUID4  # pylint: disable=no-name-in-module
 from sqlalchemy import select
 from sqlalchemy import func
-from sqlalchemy.engine.row import Row
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import update
@@ -17,9 +17,10 @@ from app.auth import schemas as us
 from app.config import settings
 from app.dependecies import get_async_db, get_current_user
 from app.services.utils import (
-    generate_page_meta, get_default_date_range, populate_transaction_schema)
+    YearMonth, generate_page_meta, get_date_range, populate_transaction_schema)
 from . import models as m, schemas as s
 from .dep import get_budget, get_transaction
+
 
 budget_router = APIRouter(prefix='/budgets', tags=['budgets'])
 transactions_router = APIRouter(prefix='/transactions', tags=['transactions'])
@@ -112,9 +113,12 @@ async def read_transactions(
         request: Request,
         offset: int = settings.PAGE_OFFSET,
         limit: int = settings.PAGE_LIMIT,
-        start: date = Query(get_default_date_range().start),
-        end: date = Query(get_default_date_range().end),
-        category: str = Query(None),
+        start: date = Query(None, description='YYYY-MM-DD'),
+        end: date = Query(None, description='YYYY-MM-DD'),
+        category: Optional[List[str]] = Query(
+            None, description='income | expenses',
+            regex='^income$|^expenses$|'),
+        budget_id: UUID4 = Query(None),
         user: us.User = Depends(get_current_user),
         db: AsyncSession = Depends(get_async_db)):
 
@@ -123,11 +127,23 @@ async def read_transactions(
         m.Budget.category,
         m.Budget.name.label('budget')).\
         join(m.Budget)
+
+    if start and end:
+        if start > end:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='start date should be less than or equal to end date')
+        stmt = stmt.where(m.Transaction.date.between(start, end))
+    elif start:
+        stmt = stmt.where(m.Transaction.date >= start)
+    elif end:
+        stmt = stmt.where(m.Transaction.date <= end)
+
     if category:
-        stmt = stmt.where(m.Budget.category == category)
-    stmt = stmt.where(m.Transaction.user_id == user.id).\
-        where(m.Transaction.date.between(start, end)).\
-        order_by(m.Transaction.date)
+        stmt = stmt.where(m.Budget.category.in_(category))
+    if budget_id:
+        stmt = stmt.filter_by(budget_id=budget_id)
+    stmt = stmt.filter_by(user_id=user.id).order_by(m.Transaction.date)
     subq = aliased(m.Transaction, stmt.subquery())
 
     transactions, row_count = await asyncio.gather(
@@ -150,15 +166,29 @@ async def add_transaction(
         budget_model: m.Budget = Depends(get_budget),
         db: AsyncSession = Depends(get_async_db)):
 
+    budget_range = get_date_range(YearMonth(
+        year=budget_model.month.year, month=budget_model.month.month))
+    try:
+        assert budget_range.start <= transaction.date <= budget_range.end
+    except AssertionError:
+        budget_range = get_date_range(
+            YearMonth(year=budget_model.month.year,
+                      month=budget_model.month.month))
+        start = budget_range.start
+        end = budget_range.end
+        range_str = '{} - {}'.format(start, end)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(f'Transaction date {transaction.date} is not within budget'
+                    f' {budget_model.name} range {range_str}'))
     db_transaction = m.Transaction(**transaction.dict(),
                                    user_id=budget_model.user_id,
                                    budget_id=budget_model.id)
-
     db.add(db_transaction)
     await db.commit()
     response = s.Transaction.from_orm(db_transaction)
     response.category = budget_model.category
-    response.budget = budget_model.name
+    response.budget_name = budget_model.name
     return response
 
 
@@ -166,18 +196,66 @@ async def add_transaction(
     '/{transaction_id}',
     status_code=status.HTTP_200_OK,
     response_model=s.Transaction)
-async def read_transaction(transaction: Row = Depends(get_transaction)):
-    t = s.Transaction.from_orm(transaction.Transaction)
-    t.category = transaction.category.value
-    t.budget = transaction.budget
-    return t
+async def read_transaction(t: m.Transaction = Depends(get_transaction)):
+    transaction = s.Transaction.from_orm(t)
+    transaction.category = t.budget.category.value
+    transaction.budget_name = t.budget.name
+    return transaction
+
+
+@transactions_router.patch(
+    '/{transaction_id}',
+    status_code=status.HTTP_200_OK,
+    response_model=s.Transaction)
+async def update_transaction(
+        transaction_schema: s.TransactcionUpdate,
+        transaction_model: m.Transaction = Depends(get_transaction),
+        db: AsyncSession = Depends(get_async_db)):
+
+    if transaction_schema.budget_id or transaction_schema.date:
+        if transaction_schema.budget_id is not None:
+            stmt = select(m.Budget).\
+                filter_by(id=transaction_schema.budget_id)
+            budget: m.Budget = (await db.execute(stmt)).scalar_one_or_none()
+            if budget is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(f'Budget with id {transaction_schema.budget_id} '
+                            'not found'))
+            # Update budget at object level but don't commit yet
+            transaction_model.budget = budget
+            await db.flush()
+        else:
+            budget: m.Budget = transaction_model.budget
+
+        budget_range = get_date_range(
+            YearMonth(year=budget.month.year, month=budget.month.month))
+        start, end = budget_range.start, budget_range.end
+        t_date = transaction_schema.date or transaction_model.date
+        try:
+            assert start <= t_date <= end
+        except AssertionError:
+            range_str = f'{start} - {end}'
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(f'Transaction date {t_date} is not within budgets '
+                        f'date range {range_str}'))
+
+    update_data = transaction_schema.dict(
+        exclude_unset=True, exclude={'budget_id'})
+    stmt = update(m.Transaction).where(
+        m.Transaction.id == transaction_model.id).values(**update_data)
+
+    await db.execute(stmt)
+    await db.commit()
+    return transaction_model
 
 
 @transactions_router.delete(
     '/{transaction_id}',
     status_code=status.HTTP_204_NO_CONTENT)
 async def remove_transaction(
-        transaction: Row = Depends(get_transaction),
+        transaction: m.Transaction = Depends(get_transaction),
         db: AsyncSession = Depends(get_async_db)):
-    await db.delete(transaction.Transaction)
+    await db.delete(transaction)
     await db.commit()

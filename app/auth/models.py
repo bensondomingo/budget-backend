@@ -9,7 +9,7 @@ from app.core.database import Base
 
 class User(Base):
     """ Users model - Represents a single user of tha application """
-    __tablename__ = 'users'
+    __tablename__ = 'user'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String, unique=True, index=True, nullable=False)
@@ -24,9 +24,9 @@ class User(Base):
                         server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    budgets = relationship('Budget', backref='users',
+    budgets = relationship('Budget', backref='user',
                            cascade='all, delete-orphan')
     transactions = relationship(
-        'Transaction', backref='users', cascade='all, delete-orphan')
+        'Transaction', backref='user', cascade='all, delete-orphan')
 
     __mapper_args__ = {"eager_defaults": True}

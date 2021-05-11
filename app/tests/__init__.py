@@ -1,59 +1,61 @@
-import pytest
+from datetime import date
 
+import pytest
+from fastapi import status
+from fastapi.testclient import TestClient
+from sqlalchemy.sql.expression import select
+
+from app.config import settings
 from app.core.database import Base, engine, SessionLocal
 from app.auth.models import User as UserModel
-from app.budget.models import Budget as BudgetModel
-from app.services.utils import get_default_date_range
-from app.services.security import Password
+from app.budget.models import (
+    Budget as BudgetModel, Transaction as TransactionModel)
+from app.main import app
+from app.services.security import Password, Payload, create_access_token
+from app.services.utils import get_date_range, YearMonth
 
 
-@pytest.fixture(scope='module', autouse=True)
-def setup_teardown_database():
+url = f'http://{settings.SERVER_HOST}:{settings.SERVER_PORT}'
+signin_url = f'{url}/auth/signin'
+
+
+@pytest.fixture(scope='function')
+def get_auth_header__test_user():
     """
-    Handles creation and cleanup of database
+    Authenticate test user and return Authorization header
     """
-    # Create database tables
-    Base.metadata.create_all(engine)
+    with TestClient(app) as c:
+        resp = c.post(signin_url, data={
+            'username': 'test',
+            'password': 'password'})
+        assert resp.status_code == status.HTTP_200_OK
+        token = resp.json().get('access_token')
+        return {'Authorization': f'Bearer {token}'}
 
-    # Create test users
-    admin_user = UserModel()
-    admin_user.username = 'admin'
-    admin_user.email = 'admin@example.com'
-    admin_user.password = Password.hash('password')
-    admin_user.is_admin = True
 
-    test_user = UserModel()
-    test_user.username = 'test'
-    test_user.email = 'test@example.com'
-    test_user.password = Password.hash('password')
+@pytest.fixture(scope='function')
+def get_auth_header__admin_user():
+    """
+    Authenticate admin user and return Authorization header
+    """
+    with TestClient(app) as c:
+        resp = c.post(signin_url, data={
+            'username': 'admin',
+            'password': 'password'})
+        assert resp.status_code == status.HTTP_200_OK
+        token = resp.json().get('access_token')
+        return {'Authorization': f'Bearer {token}'}
 
-    with SessionLocal() as db:
-        db.add(admin_user)
-        db.add(test_user)
-        db.flush()
 
-        budget1 = BudgetModel(
-            name='budget-expenses-1', category='exp',
-            planned_amount=1000, month=get_default_date_range().start,
-            user_id=test_user.id)
-        budget2 = BudgetModel(
-            name='budget-expenses-2', category='exp',
-            planned_amount=2000, month=get_default_date_range().start,
-            user_id=test_user.id)
-        budget3 = BudgetModel(
-            name='budget-expenses-3', category='exp',
-            planned_amount=3000, month=get_default_date_range().start,
-            user_id=test_user.id)
-        budget4 = BudgetModel(
-            name='budget-income-1', category='inc', planned_amount=10000,
-            month=get_default_date_range().start, user_id=test_user.id)
-        budget5 = BudgetModel(
-            name='budget-income-2', category='inc', planned_amount=10000,
-            month=get_default_date_range().start, user_id=test_user.id)
-        db.add_all([budget1, budget2, budget3, budget4, budget5])
-
-        db.add_all([budget1, budget2, budget3, budget4, budget5])
-        db.commit()
-
-    yield None
-    Base.metadata.drop_all(engine)
+@pytest.fixture(scope='function')
+def geth_auth_header():
+    """
+    Manually generate an authentication header for test user
+    """
+    stmt = select(UserModel).filter_by(username='test')
+    with SessionLocal() as session:
+        result = session.execute(stmt).one()
+        user: UserModel = result.User
+        payload = Payload(uid=str(user.id), sub=user.username)
+        token = create_access_token(payload)
+        return {'Authorization': f'Bearer {token}'}

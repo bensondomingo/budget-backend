@@ -32,7 +32,7 @@ class PageMeta(BaseModel):
     nxt: AnyHttpUrl = Field(None)
 
 
-def get_default_date_range(my: YearMonth = YearMonth()) -> DateRange:
+def get_date_range(my: YearMonth = YearMonth()) -> DateRange:
     year = my.year
     month = my.month
     last_day = calendar.monthrange(year, month)[1]
@@ -45,7 +45,7 @@ def populate_transaction_schema(
         result: Sequence[Row], transaction_schema: BaseModel):
     for row in result:
         transaction = transaction_schema.from_orm(row.Transaction)
-        transaction.budget = row.budget
+        transaction.budget_name = row.budget
         transaction.category = row.category.value
         yield transaction
 
