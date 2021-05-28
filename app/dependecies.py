@@ -105,7 +105,7 @@ async def create_user(
             detail="username and/or email is not available")
 
     user.password = Password.hash(user.password)
-    db_user = um.User(**user.dict(exclude={'password2'}))
+    db_user = um.User(**user.dict(exclude={'password2'}, exclude_unset=True))
     db.add(db_user)
     await db.commit()
     return db_user

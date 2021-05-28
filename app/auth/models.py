@@ -1,10 +1,12 @@
 import uuid
 
+from pydantic.types import UUID4  # pylint: disable=no-name-in-module
 from sqlalchemy import Boolean, Column, func, TIMESTAMP, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
-from app.core.database import Base
+from app.budget.models import Budget as BudgetModel, default_budgets
+from app.core.database import Base, SessionLocal
 
 
 class User(Base):
@@ -30,3 +32,17 @@ class User(Base):
         'Transaction', backref='user', cascade='all, delete-orphan')
 
     __mapper_args__ = {"eager_defaults": True}
+
+
+def post_signup(user_id: UUID4):
+
+    def assign_user_id():
+        for b in default_budgets:
+            budget = BudgetModel(**b.dict(exclude_unset=True))
+            budget.user_id = user_id
+            yield budget
+
+    with SessionLocal() as session:
+        budgets = [*assign_user_id()]
+        session.add_all(budgets)
+        session.commit()

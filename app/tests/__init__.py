@@ -6,13 +6,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.sql.expression import select
 
 from app.config import settings
-from app.core.database import Base, engine, SessionLocal
+from app.core.database import SessionLocal
 from app.auth.models import User as UserModel
-from app.budget.models import (
-    Budget as BudgetModel, Transaction as TransactionModel)
 from app.main import app
-from app.services.security import Password, Payload, create_access_token
-from app.services.utils import get_date_range, YearMonth
+from app.services.security import Payload, create_access_token
 
 
 url = f'http://{settings.SERVER_HOST}:{settings.SERVER_PORT}'

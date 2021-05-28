@@ -1,7 +1,7 @@
 from typing import Sequence
 from pydantic.types import UUID4  # pylint: disable=no-name-in-module
 from fastapi.exceptions import HTTPException
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import select
 from aioredis import Redis
@@ -11,6 +11,7 @@ from app.dependecies import (authenticate_user, create_user,
 from app.services.security import (
     Payload, ban_token, create_access_token, oauth2_scheme, Password)
 from app.auth import models as um
+from app.auth.models import post_signup
 from . import schemas as s
 
 auth_router = APIRouter(prefix='/auth', tags=['Authentication'])
@@ -29,9 +30,11 @@ async def signin(access_token: str = Depends(authenticate_user)):
     '/signup',
     response_model=s.Token,
     status_code=status.HTTP_201_CREATED)
-async def signup(user: s.User = Depends(create_user)):
+async def signup(background_task: BackgroundTasks,
+                 user: s.User = Depends(create_user)):
     payload = Payload(uid=str(user.id), sub=user.username)
     token = create_access_token(payload)
+    background_task.add_task(post_signup, user_id=user.id)
     return s.Token(access_token=token, token_type='bearer')
 
 
